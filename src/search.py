@@ -1,3 +1,8 @@
+import os
+
+from utils import embedding_factory, llm_factory
+from langchain_postgres import PGVector
+
 PROMPT_TEMPLATE = """
 CONTEXTO:
 {contexto}
@@ -25,5 +30,27 @@ PERGUNTA DO USUÁRIO:
 RESPONDA A "PERGUNTA DO USUÁRIO"
 """
 
+def search_vector_db(query: str):
+    embeddings = embedding_factory()
+    store = PGVector(
+        embeddings=embeddings,
+        collection_name=os.getenv("PG_VECTOR_COLLECTION_NAME"),
+        connection=os.getenv("DATABASE_URL"),
+        use_jsonb=True,
+    )
+
+    result = store.similarity_search_with_score(query, k=10)
+    concat_result = [f"{doc.page_content}\n" for doc, score in result]
+    return "\n".join(concat_result)
+
+def build_prompt(question: str):
+    context = search_vector_db(question)
+    return PROMPT_TEMPLATE.format(contexto=context, pergunta=question)
+    
+
 def search_prompt(question=None):
-    pass
+    llm = llm_factory()
+    prompt = build_prompt(question)
+    result = llm.invoke(prompt) 
+
+    return result
